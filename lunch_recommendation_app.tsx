@@ -1,0 +1,254 @@
+import { useState } from 'react';
+import { Cloud, Sun, CloudRain, Snowflake, Wind, Utensils, Coffee } from 'lucide-react';
+
+export default function LunchRecommender() {
+  const [weather, setWeather] = useState('');
+  const [temperature, setTemperature] = useState('');
+  const [recommendation, setRecommendation] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const weatherOptions = [
+    { value: '맑음', label: '☀️ 맑음', icon: Sun },
+    { value: '흐림', label: '☁️ 흐림', icon: Cloud },
+    { value: '비', label: '🌧️ 비', icon: CloudRain },
+    { value: '눈', label: '❄️ 눈', icon: Snowflake },
+    { value: '바람', label: '💨 바람', icon: Wind }
+  ];
+
+  const getRecommendation = async () => {
+    if (!weather) {
+      alert('날씨를 선택해주세요!');
+      return;
+    }
+
+    setLoading(true);
+    setRecommendation(null);
+
+    try {
+      const today = new Date().toLocaleDateString('ko-KR', {
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+      });
+
+      const tempInfo = temperature ? `기온은 ${temperature}도` : '기온 정보 없음';
+      
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: `오늘은 ${today}이고, 날씨는 ${weather}입니다. ${tempInfo}입니다.
+
+이 날씨에 딱 맞는 점심 메뉴를 추천해주세요. 다음 JSON 형식으로만 답변해주세요:
+
+{
+  "mainMenu": "추천 메인 메뉴 이름",
+  "description": "이 메뉴를 추천하는 이유 (2-3문장, 날씨와 연관지어)",
+  "alternatives": ["대체 메뉴1", "대체 메뉴2", "대체 메뉴3"],
+  "sideDish": "어울리는 사이드 메뉴",
+  "drink": "추천 음료",
+  "tip": "맛있게 먹는 팁 (1문장)"
+}
+
+구체적이고 실용적인 한식, 중식, 일식, 양식 등 다양한 메뉴를 추천해주세요.`
+          }]
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!data.content || !data.content[0]) {
+        throw new Error('Invalid API response');
+      }
+      
+      const content = data.content[0].text;
+      
+      // JSON 파싱
+      let cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      
+      const firstBrace = cleanContent.indexOf('{');
+      const lastBrace = cleanContent.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        cleanContent = cleanContent.substring(firstBrace, lastBrace + 1);
+      }
+      
+      const menuData = JSON.parse(cleanContent);
+      
+      if (!menuData.mainMenu || !menuData.description) {
+        throw new Error('Invalid menu data');
+      }
+      
+      setRecommendation(menuData);
+    } catch (error) {
+      console.error('Error:', error);
+      alert('메뉴 추천 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-400 via-pink-400 to-purple-500 p-4 flex items-center justify-center">
+      <div className="max-w-3xl w-full">
+        {/* 헤더 */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Utensils className="w-10 h-10 text-white animate-bounce" />
+            <h1 className="text-5xl font-bold text-white">점심 뭐 먹지?</h1>
+            <Coffee className="w-10 h-10 text-white animate-bounce" />
+          </div>
+          <p className="text-white/90 text-lg">오늘 날씨에 딱 맞는 메뉴를 추천해드려요</p>
+        </div>
+
+        {/* 입력 카드 */}
+        <div className="bg-white rounded-3xl p-8 shadow-2xl mb-6">
+          <div className="space-y-6">
+            {/* 날씨 선택 */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-3 text-lg">
+                🌤️ 오늘 날씨는?
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                {weatherOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setWeather(option.value)}
+                    className={`p-4 rounded-xl border-2 transition-all duration-200 font-medium ${
+                      weather === option.value
+                        ? 'border-orange-500 bg-orange-50 text-orange-700 scale-105'
+                        : 'border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">{option.label.split(' ')[0]}</div>
+                    <div className="text-sm">{option.label.split(' ')[1]}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 기온 입력 (선택사항) */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-3 text-lg">
+                🌡️ 기온 (선택사항)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  value={temperature}
+                  onChange={(e) => setTemperature(e.target.value)}
+                  placeholder="예: 25"
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-400 focus:outline-none text-lg"
+                />
+                <span className="text-2xl text-gray-600">°C</span>
+              </div>
+            </div>
+
+            {/* 추천 버튼 */}
+            <button
+              onClick={getRecommendation}
+              disabled={loading}
+              className="w-full py-4 bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold text-xl rounded-xl hover:from-orange-600 hover:to-pink-600 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              {loading ? '메뉴 고르는 중... 🍳' : '메뉴 추천받기 🍽️'}
+            </button>
+          </div>
+        </div>
+
+        {/* 추천 결과 */}
+        {recommendation && (
+          <div className="bg-white rounded-3xl p-8 shadow-2xl animate-fadeIn">
+            <div className="space-y-6">
+              {/* 메인 메뉴 */}
+              <div className="text-center pb-6 border-b-2 border-gray-100">
+                <div className="text-6xl mb-4">🍽️</div>
+                <h2 className="text-4xl font-bold text-gray-800 mb-4">
+                  {recommendation.mainMenu}
+                </h2>
+                <p className="text-gray-600 text-lg leading-relaxed">
+                  {recommendation.description}
+                </p>
+              </div>
+
+              {/* 대체 메뉴 */}
+              {recommendation.alternatives && recommendation.alternatives.length > 0 && (
+                <div className="bg-orange-50 rounded-2xl p-6">
+                  <h3 className="text-xl font-bold text-gray-800 mb-3">
+                    🔄 다른 선택지
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {recommendation.alternatives.map((alt, index) => (
+                      <span
+                        key={index}
+                        className="px-4 py-2 bg-white rounded-full text-gray-700 font-medium shadow-sm"
+                      >
+                        {alt}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 사이드 & 음료 */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                {recommendation.sideDish && (
+                  <div className="bg-pink-50 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                      <span>🥗</span> 사이드 메뉴
+                    </h3>
+                    <p className="text-gray-700">{recommendation.sideDish}</p>
+                  </div>
+                )}
+                
+                {recommendation.drink && (
+                  <div className="bg-purple-50 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                      <span>🥤</span> 추천 음료
+                    </h3>
+                    <p className="text-gray-700">{recommendation.drink}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 팁 */}
+              {recommendation.tip && (
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl p-6 border-2 border-yellow-200">
+                  <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                    <span>💡</span> 맛있게 먹는 팁
+                  </h3>
+                  <p className="text-gray-700 italic">"{recommendation.tip}"</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 푸터 */}
+        <div className="text-center mt-8 text-white text-sm">
+          <p>🍴 오늘도 맛있는 점심 되세요! 🍴</p>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.5s ease-out;
+        }
+      `}</style>
+    </div>
+  );
+}
